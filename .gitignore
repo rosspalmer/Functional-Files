@@ -1,2 +1,9 @@
 *.class
 *.log
+
+# Scala Ignores
+target/
+sbt.json
+
+# Intellij Ignores
+.idea/
