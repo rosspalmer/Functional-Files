@@ -1,4 +1,7 @@
-@main def hello: Unit = 
+
+package ross.palmer.ffiles
+
+@main def hello: Unit =
   println("Hello world!")
   println(msg)
 
