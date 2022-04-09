@@ -1,19 +1,18 @@
 package ross.palmer.ffiles
 
+import cats.Monoid
+import cats.implicits.*
+
+import io.circe.Json
+import io.circe._
+
 import scala.io.Source
 
-import cats.Monoid
-import cats.implicits._
+import ross.palmer.ffiles.CatsUtils
 
-case class FileInfo(file: Source,
-                    hashTags: Set[String] = Set.empty,
-                    namedTags: Map[String, String] = Map.empty) {
-
-  def mergeTags(tags: Set[String]): FileInfo = withTags(hashTags.concat(tags))
-  def mergeTags(tags: Map[String, String]): FileInfo = withTags(tags)
-  def withTags(tags: Set[String]): FileInfo = FileInfo(file, tags, namedTags)
-  def withTags(tags: Map[String, String]): FileInfo = FileInfo(file, hashTags, tags)
-
+case class FileInfo(file: Source, metadata: Json = Json.Null) {
+  def mergeMetadata(data: Json): FileInfo = withMetadata(metadata.deepMerge(data))
+  def withMetadata(data: Json): FileInfo = FileInfo(file, data)
 }
 case class FileBase(infoSet: Set[FileInfo])
 
@@ -29,53 +28,23 @@ object FileBaseMonoids {
     }
   }
 
-  def splitByRegex(file: Source, splitRegex: String): Set[String] = file.descr.split(splitRegex).toSet
-  def mapByRegex(lines: Set[String], mapRegex: String): Map[String, String] = {
-    val r = mapRegex.r
-    lines.map(l => r.findFirstMatchIn(l))
-         .filter(_.isDefined)
-         .map(m => (m.get.group(1), m.get.group(2))).toMap
-  }
+  def loadMetaFromFilePath(metaRegex: String, merge: Boolean = true): Monoid[FileBase] = new FileBaseMonoid {
 
-  def hashTagBySplit(splitRegex: String, merge: Boolean = true): Monoid[FileBase] = new FileBaseMonoid {
+    val r = metaRegex.r
+
+    def runRegex(f: FileInfo): FileInfo = {
+      val m = r.findFirstMatchIn(f.file.descr)
+      if (m.isDefined) {
+        val newData = Json.fromFields(m.get.groupNames.map(n => (n, Json.fromString(m.get.group(n)))))
+        if (merge) f.mergeMetadata(newData) else f.withMetadata(newData)
+      } else f
+    }
+
     override def combine(x: FileBase, y: FileBase): FileBase = {
 
-      implicit val m = FileBaseMonoids.merge
-      val withFunc: FileInfo => Set[String] = f => {
-        val tags = f.file.descr.split(splitRegex).toSet
-        if (merge) f.hashTags.concat(tags) else tags
-      }
-
-      val yWithTags = FileBase(y.infoSet.map(f => f.withTags(withFunc(f))))
+      implicit val m: Monoid[FileBase] = FileBaseMonoids.merge
+      val yWithTags = FileBase(y.infoSet.map(runRegex))
       CatsUtils.combineAll(List(x, yWithTags))
-
-    }
-  }
-
-  def namedTagByRegex(splitRegex: String, nameRegex: String, merge: Boolean = true): Monoid[FileBase] = new FileBaseMonoid {
-    override def combine(x: FileBase, y: FileBase): FileBase = {
-
-      def addNamedTags(f: FileInfo): FileInfo = {
-        val newTags = mapByRegex(splitByRegex(f.file, splitRegex), nameRegex)
-        f.withTags(if (merge) CatsUtils.combineAll(List(f.namedTags, newTags)) else newTags)
-      }
-
-      implicit val m = FileBaseMonoids.merge
-      CatsUtils.combineAll(List(x, FileBase(y.infoSet.map(addNamedTags))))
-
-    }
-  }
-
-  def namedTagByOrder(splitRegex: String, nameRegex: String, merge: Boolean = true): Monoid[FileBase] = new FileBaseMonoid {
-    override def combine(x: FileBase, y: FileBase): FileBase = {
-
-      def addNamedTags(f: FileInfo): FileInfo = {
-        val newTags = mapByRegex(splitByRegex(f.file, splitRegex), nameRegex)
-        f.withTags(if (merge) CatsUtils.combineAll(List(f.namedTags, newTags)) else newTags)
-      }
-
-      implicit val m = FileBaseMonoids.merge
-      CatsUtils.combineAll(List(x, FileBase(y.infoSet.map(addNamedTags))))
 
     }
   }
