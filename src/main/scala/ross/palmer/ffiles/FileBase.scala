@@ -2,22 +2,22 @@ package ross.palmer.ffiles
 
 import cats.Monoid
 import cats.implicits.*
-
 import io.circe.Json
-import io.circe._
+import io.circe.*
 
-import scala.io.Source
-
+import java.io.File
 import ross.palmer.ffiles.CatsUtils
 
-case class FileInfo(file: Source, metadata: Json = Json.Null) {
+import scala.util.matching.Regex
+
+case class FileInfo(file: File, metadata: Json = Json.Null) {
   def mergeMetadata(data: Json): FileInfo = withMetadata(metadata.deepMerge(data))
   def withMetadata(data: Json): FileInfo = FileInfo(file, data)
 }
-case class FileBase(infoSet: Set[FileInfo])
+case class FileBase(infoSet: Seq[FileInfo])
 
 abstract class FileBaseMonoid extends Monoid[FileBase] {
-  override def empty: FileBase = FileBase(Set.empty)
+  override def empty: FileBase = FileBase(Seq.empty)
 }
 
 object FileBaseMonoids {
@@ -28,12 +28,13 @@ object FileBaseMonoids {
     }
   }
 
-  def loadMetaFromFilePath(metaRegex: String, merge: Boolean = true): Monoid[FileBase] = new FileBaseMonoid {
+  def loadMetaFromFilePath(metaRegex: String, metaNames: Seq[String],
+                           merge: Boolean = true): Monoid[FileBase] = new FileBaseMonoid {
 
-    val r = metaRegex.r
+    val regex = new Regex(metaRegex, metaNames: _*)
 
     def runRegex(f: FileInfo): FileInfo = {
-      val m = r.findFirstMatchIn(f.file.descr)
+      val m = regex.findFirstMatchIn(f.file.getPath)
       if (m.isDefined) {
         val newData = Json.fromFields(m.get.groupNames.map(n => (n, Json.fromString(m.get.group(n)))))
         if (merge) f.mergeMetadata(newData) else f.withMetadata(newData)

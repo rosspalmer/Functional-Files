@@ -15,7 +15,9 @@ lazy val root = project
     libraryDependencies ++= Seq(
         "io.circe" %% "circe-core",
         "io.circe" %% "circe-parser"
-    ).map(_ % circeVersion)
+    ).map(_ % circeVersion),
 
+    libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.11",
+    libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.11" % "test"
 
 )
