@@ -1,6 +1,6 @@
 
 
-abstract class FilePointer[T] {
+abstract class FilePointer {
 
   val filePath: String
 
